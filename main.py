@@ -68,7 +68,7 @@ async def lifesteal(ctx):
         await ctx.author.timeout(duration, reason="void.")
         
         # Bot's confirmation deletes itself after 5 seconds to keep chat clean
-        await ctx.send(f"{ctx.author.mention} went to the void. (Message auto-cleaned)", delete_after=5)
+        await ctx.send(f"{ctx.author.mention} has been muted. (Message auto-cleaned)", delete_after=5)
     
     except discord.Forbidden:
         # Error if bot is lower than the user in role hierarchy
