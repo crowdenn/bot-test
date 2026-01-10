@@ -6,12 +6,15 @@ from discord.ext import tasks, commands
 from flask import Flask
 from threading import Thread
 
-# --- 1. WEB SERVER ---
+# --- 1. WEB SERVER (KEEP ALIVE) ---
 app = Flask('')
+
 @app.route('/')
-def home(): return "Project is runnin and goin!"
+def home():
+    return "Project is runnin and goin!"
 
 def run():
+    # Use the port Render provides or default to 8080
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
 
@@ -21,24 +24,27 @@ def keep_alive():
 
 # --- 2. BOT SETUP ---
 intents = discord.Intents.default()
-intents.message_content = True 
-intents.members = True # Needed to mute/manage members
+intents.message_content = True  # Required to read commands
+intents.members = True          # Required for timeouts/muting
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # --- 3. RANDOM BEEP LOOP ---
-@tasks.loop(seconds=1) # We run it frequently but use logic to decide when to beep
+@tasks.loop(seconds=1) 
 async def beep_loop():
     channel_id = 1364299553733345393
     channel = bot.get_channel(channel_id)
     
-    # Wait for a random time between 1 and 10 minutes (60 to 600 seconds)
+    # Wait for a random time between 1 and 10 minutes
     wait_time = random.randint(60, 600)
     await asyncio.sleep(wait_time)
     
     if channel:
-        await channel.send("beep beep")
-        print(f"Sent beep beep after waiting {wait_time}s")
+        try:
+            await channel.send("beep beep")
+            print(f"Sent beep beep after waiting {wait_time}s")
+        except Exception as e:
+            print(f"Loop error: {e}")
 
 @bot.event
 async def on_ready():
@@ -46,27 +52,28 @@ async def on_ready():
     if not beep_loop.is_running():
         beep_loop.start()
 
-# --- 4. THE LIFESTEAL MUTE LOGIC ---
-@bot.event
-async def on_message(message):
-    # Don't let the bot mute itself
-    if message.author == bot.user:
+# --- 4. THE LIFESTEAL COMMAND ---
+@bot.command(name="lifesteal")
+async def lifesteal(ctx):
+    # The bot cannot mute the Server Owner or itself
+    if ctx.author == bot.user:
         return
 
-    # Check for !lifesteal (case insensitive)
-    if "!lifesteal" in message.content.lower():
-        try:
-            # This "mutes" them by removing their ability to send messages in the server
-            # Note: The bot needs 'Manage Roles' or 'Moderate Members' permission!
-            await message.author.timeout(discord.utils.utcnow() + asyncio.timedelta(minutes=10), reason="Said !lifesteal")
-            await message.channel.send(f"{message.author.mention} test")
-        except Exception as e:
-            await message.channel.send("I tried to mute them, but I don't have enough permissions!")
-            print(f"Error: {e}")
+    try:
+        # Timeout for 10 minutes
+        duration = asyncio.timedelta(minutes=10)
+        await ctx.author.timeout(duration, reason="Used !lifesteal command")
+        await ctx.send(f"🔇 {ctx.author.mention} has been muted for 10 minutes.")
+    
+    except discord.Forbidden:
+        # This triggers if the bot's role is too low
+        await ctx.send("❌ **Permission Error:** My role must be ABOVE yours in the server settings to mute you!")
+    
+    except Exception as e:
+        await ctx.send(f"⚠️ Could not mute: {e}")
 
-    # This line ensures other commands (like !ping) still work
-    await bot.process_commands(message)
-
-# --- START ---
-keep_alive()
-bot.run(os.getenv('DISCORD_TOKEN'))
+# --- 5. START ---
+if __name__ == "__main__":
+    keep_alive()
+    # Ensure your Secret/Environment Variable in Render is named DISCORD_TOKEN
+    bot.run(os.getenv('DISCORD_TOKEN'))
