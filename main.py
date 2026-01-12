@@ -32,7 +32,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # --- 3. RANDOM BEEP LOOP ---
 @tasks.loop(seconds=1) 
 async def beep_loop():
-    channel_id = 1364299553733345393
+    channel_id = 1364219102662754405
     channel = bot.get_channel(channel_id)
     
     # Wait for a random time between 10 and 60 minutes (600 to 3600 seconds)
