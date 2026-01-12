@@ -24,32 +24,37 @@ def keep_alive():
 
 # --- 2. BOT SETUP ---
 intents = discord.Intents.default()
-intents.message_content = True  # Required to read commands
-intents.members = True          # Required for timeouts/muting
+intents.message_content = True 
+intents.members = True          
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+CHANNEL_ID = 1364219102662754405 # Defined here for easy access
 
 # --- 3. RANDOM BEEP LOOP ---
 @tasks.loop(seconds=1) 
 async def beep_loop():
-    channel_id = 1364219102662754405
-    channel = bot.get_channel(channel_id)
-    
-    # Wait for a random time between 10 and 60 minutes (600 to 3600 seconds)
-    wait_time = random.randint(600, 3600) 
+    # Wait for a random time between 10 and 20 minutes (600 to 1200 seconds)
+    wait_time = random.randint(600, 1200) 
     await asyncio.sleep(wait_time)
     
+    channel = bot.get_channel(CHANNEL_ID)
     if channel:
         try:
-            # Beeps will now stay in the chat permanently
             await channel.send("beep beep")
-            print(f"Sent beep beep. Next one in {wait_time}s")
+            print(f"Sent loop beep. Next one in {wait_time}s")
         except Exception as e:
             print(f"Loop error: {e}")
 
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
+    
+    # --- IMMEDIATE BEEP ON STARTUP ---
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel:
+        await channel.send("beep beep")
+        print("Initial startup beep sent!")
+
     if not beep_loop.is_running():
         beep_loop.start()
 
@@ -60,23 +65,16 @@ async def lifesteal(ctx):
         return
 
     try:
-        # Delete the user's message immediately
         await ctx.message.delete()
-        
-        # Apply a 10-minute timeout
         duration = datetime.timedelta(minutes=10)
         await ctx.author.timeout(duration, reason="void.")
-        
-        # Bot's confirmation deletes itself after 5 seconds to keep chat clean
-        await ctx.send(f"{ctx.author.mention} has been muted.", delete_after=1)
+        await ctx.send(f"{ctx.author.mention} has been muted. (Message auto-cleaned)", delete_after=5)
     
     except discord.Forbidden:
-        # Error if bot is lower than the user in role hierarchy
         await ctx.send("no perms?", delete_after=10)
     
     except Exception as e:
         print(f"Command error: {e}")
-        # Fixed the syntax error here
         await ctx.send(f"error: {e}", delete_after=5)
 
 # --- 5. START ---
