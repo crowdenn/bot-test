@@ -12,7 +12,7 @@ from threading import Thread
 BEEP_CHANNEL_ID = 1364219102662754405
 PROMO_CHANNEL_IDS = [1395842773562822696, 1363954478847627375]
 
-# Updated messages as requested
+# Your specific promo messages
 PROMO_MESSAGES = [
     "SUBCRIBE to support the stream and get access to awesome emotes!",
     "Did you know you can subscribe for FREE!? With Twitch Prime: <http://www.twitchprime.com/>",
@@ -20,8 +20,8 @@ PROMO_MESSAGES = [
 ]
 
 # Logic Settings
-HYPE_THRESHOLD = 15      # Messages required
-PROMO_COOLDOWN = 1200    # Seconds to wait (20 minutes)
+HYPE_THRESHOLD = 15      # Messages required before a promo
+PROMO_COOLDOWN = 1200    # Seconds to wait (20 minutes) between promos
 
 # Tracking data
 channel_hype = {cid: 0 for cid in PROMO_CHANNEL_IDS}
@@ -35,6 +35,75 @@ def home(): return "Bot is running."
 def run():
     port = int(os.environ.get("PORT", 8080))
     app.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    Thread(target=run).start()
+
+# --- 3. BOT SETUP ---
+intents = discord.Intents.default()
+intents.message_content = True 
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# --- 4. ACTIVITY & PROMO LOGIC ---
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+
+    # Check if message is in one of the promo target channels
+    if message.channel.id in PROMO_CHANNEL_IDS:
+        cid = message.channel.id
+        channel_hype[cid] += 1
+        
+        current_time = time.time()
+        time_diff = current_time - last_promo_time.get(cid, 0)
+
+        # TRIGGER CHECK: Both message count AND time must be met
+        if channel_hype[cid] >= HYPE_THRESHOLD and time_diff >= PROMO_COOLDOWN:
+            await message.channel.send(random.choice(PROMO_MESSAGES))
+            # Reset trackers
+            channel_hype[cid] = 0 
+            last_promo_time[cid] = current_time
+
+    await bot.process_commands(message)
+
+# --- 5. THE RANDOM BEEP LOOP ---
+@tasks.loop(seconds=1) 
+async def beep_loop():
+    # Wait between 10 and 45 minutes
+    wait_time = random.randint(600, 2700) 
+    await asyncio.sleep(wait_time)
+    
+    channel = bot.get_channel(BEEP_CHANNEL_ID)
+    if channel:
+        try:
+            await channel.send("beep beep")
+        except Exception as e:
+            print(f"Beep error: {e}")
+
+# --- 6. COMMANDS ---
+@bot.command(name="lifesteal")
+async def lifesteal(ctx):
+    try:
+        # Silently delete the user's message
+        await ctx.message.delete()
+        
+        # Apply 10 minute timeout
+        duration = datetime.timedelta(minutes=10)
+        await ctx.author.timeout(duration, reason="void.")
+    except Exception:
+        pass 
+
+# --- 7. STARTUP ---
+@bot.event
+async def on_ready():
+    print(f'Logged in as {bot.user}')
+    if not beep_loop.is_running():
+        beep_loop.start()
+
+if __name__ == "__main__":
+    keep_alive()
+    bot.run(os.getenv('DISCORD_TOKEN'))    app.run(host='0.0.0.0', port=port)
 
 def keep_alive():
     Thread(target=run).start()
