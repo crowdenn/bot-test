@@ -19,12 +19,12 @@ PROMO_MESSAGES = [
 ]
 
 # Logic Settings
-HYPE_THRESHOLD = 15      # Messages required
-PROMO_COOLDOWN = 1200    # Seconds (20 minutes)
+HYPE_THRESHOLD = 50     
+PROMO_WINDOW = 1200      
 
 # Tracking data
 channel_hype = {cid: 0 for cid in PROMO_CHANNEL_IDS}
-last_promo_time = {cid: 0 for cid in PROMO_CHANNEL_IDS}
+window_start_time = {cid: time.time() for cid in PROMO_CHANNEL_IDS}
 
 # --- 2. WEB SERVER (KEEP ALIVE) ---
 app = Flask('')
@@ -51,16 +51,18 @@ async def on_message(message):
 
     cid = message.channel.id
     if cid in PROMO_CHANNEL_IDS:
+        current_time = time.time()
+        
+        if current_time - window_start_time[cid] > PROMO_WINDOW:
+            channel_hype[cid] = 0
+            window_start_time[cid] = current_time
+        
         channel_hype[cid] += 1
         
-        current_time = time.time()
-        time_diff = current_time - last_promo_time.get(cid, 0)
-
-        # Trigger check: Both requirements must be met
-        if channel_hype[cid] >= HYPE_THRESHOLD and time_diff >= PROMO_COOLDOWN:
+        if channel_hype[cid] >= HYPE_THRESHOLD:
             await message.channel.send(random.choice(PROMO_MESSAGES))
             channel_hype[cid] = 0 
-            last_promo_time[cid] = current_time
+            window_start_time[cid] = current_time
 
     await bot.process_commands(message)
 
