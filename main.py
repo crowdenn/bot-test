@@ -83,15 +83,19 @@ async def beep_loop():
         except Exception as e:
             print(f"Beep error: {e}")
 
-    # 2. Voice Beep (Synced)
+    # 2. Voice Beep (Synced & Stable)
+    global current_voice_client
     if current_voice_client and current_voice_client.is_connected():
         try:
-            # Ensure path to 'beep.mp3' is correct
-            source = discord.FFmpegPCMAudio('beep.mp3')
+            # Added loglevel panic to save CPU and after= to cleanup
+            def after_playing(error):
+                if error: print(f"Loop player error: {error}")
+
             if not current_voice_client.is_playing():
-                current_voice_client.play(source)
+                source = discord.FFmpegPCMAudio('beep.mp3', options="-loglevel panic")
+                current_voice_client.play(source, after=after_playing)
         except Exception as e:
-            print(f"Voice playback error: {e}")
+            print(f"Loop voice error: {e}")
 
 # --- 6. COMMANDS ---
 @bot.command(name="beep")
