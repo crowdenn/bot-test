@@ -95,31 +95,31 @@ async def beep_loop():
 
 # --- 6. COMMANDS ---
 @bot.command(name="beep")
+@bot.command(name="beep")
 async def manual_beep(ctx):
-    # Only allow the specific user ID to run this
     if ctx.author.id != 666000585266561034:
-        return # Silently ignore everyone else
+        return
 
     global current_voice_client
     
-    # 1. Manual Text Beep
+    # Text Beep
     channel = bot.get_channel(BEEP_CHANNEL_ID)
     if channel:
         await channel.send("beep beep (manual)")
 
-    # 2. Manual Voice Beep
     if current_voice_client and current_voice_client.is_connected():
         try:
-            # Check if it's already playing something to avoid overlapping audio
+            # We add a 'cleanup' to handle the player better
+            def after_playing(error):
+                if error:
+                    print(f"Player error: {error}")
+
             if not current_voice_client.is_playing():
-                source = discord.FFmpegPCMAudio('beep.mp3')
-                current_voice_client.play(source)
-            else:
-                await ctx.send("Already beeping!", delete_after=5)
+                # Use FFmpegPCMAudio with options to reduce CPU load
+                source = discord.FFmpegPCMAudio('beep.mp3', options="-loglevel panic")
+                current_voice_client.play(source, after=after_playing)
         except Exception as e:
-            print(f"Manual voice beep error: {e}")
-    else:
-        await ctx.send("I'm not in a voice channel!", delete_after=5)
+            print(f"Voice error: {e}")
 @bot.command(name="join")
 async def join(ctx):
     global current_voice_client
