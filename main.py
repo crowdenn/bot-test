@@ -43,8 +43,8 @@ def keep_alive():
 # --- 3. BOT SETUP ---
 intents = discord.Intents.default()
 intents.message_content = True 
+intents.voice_states = True  # <--- This is the "Voice State Intent" in code
 bot = commands.Bot(command_prefix="!", intents=intents)
-
 # --- 4. ACTIVITY & PROMO LOGIC ---
 @bot.event
 async def on_message(message):
