@@ -11,6 +11,8 @@ from threading import Thread
 # --- 1. CONFIGURATION ---
 BEEP_CHANNEL_ID = 1364219102662754405
 PROMO_CHANNEL_IDS = [1395842773562822696, 1363954478847627375]
+# Track voice connection
+current_voice_client = None
 
 PROMO_MESSAGES = [
     "SUBCRIBE to support the stream and get access to awesome emotes!",
@@ -69,9 +71,11 @@ async def on_message(message):
 # --- 5. THE RANDOM BEEP LOOP ---
 @tasks.loop(seconds=1) 
 async def beep_loop():
+    # Wait between 10 to 45 minutes
     wait_time = random.randint(600, 2700) 
     await asyncio.sleep(wait_time)
     
+    # 1. Text Beep
     channel = bot.get_channel(BEEP_CHANNEL_ID)
     if channel:
         try:
@@ -79,7 +83,37 @@ async def beep_loop():
         except Exception as e:
             print(f"Beep error: {e}")
 
+    # 2. Voice Beep (Synced)
+    if current_voice_client and current_voice_client.is_connected():
+        try:
+            # Ensure path to 'beep.mp3' is correct
+            source = discord.FFmpegPCMAudio('beep.mp3')
+            if not current_voice_client.is_playing():
+                current_voice_client.play(source)
+        except Exception as e:
+            print(f"Voice playback error: {e}")
+
 # --- 6. COMMANDS ---
+@bot.command(name="join")
+async def join(ctx):
+    global current_voice_client
+    
+    # If bot is already in a voice channel, leave it
+    if ctx.voice_client:
+        await ctx.voice_client.disconnect()
+        current_voice_client = None
+        await ctx.send("Left voice channel.")
+        return
+
+    # Check if user is in a voice channel
+    if not ctx.author.voice:
+        await ctx.send("You need to be in a voice channel for me to join!")
+        return
+
+    channel = ctx.author.voice.channel
+    current_voice_client = await channel.connect()
+    await ctx.send(f"Joined {channel.name}!")
+    
 @bot.command(name="lifesteal")
 async def lifesteal(ctx):
     try:
