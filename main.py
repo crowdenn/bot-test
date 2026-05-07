@@ -11,6 +11,7 @@ from threading import Thread
 # --- 1. CONFIGURATION ---
 BEEP_CHANNEL_ID = 1500916551031980052
 PROMO_CHANNEL_IDS = [1500852876245729390, 1500912425900179598]
+
 # Track voice connection
 current_voice_client = None
 
@@ -20,18 +21,17 @@ PROMO_MESSAGES = [
     "Enter a message"
 ]
 
-# Logic Settings
 HYPE_THRESHOLD = 50     
 PROMO_WINDOW = 1200      
 
-# Tracking data
 channel_hype = {cid: 0 for cid in PROMO_CHANNEL_IDS}
 window_start_time = {cid: time.time() for cid in PROMO_CHANNEL_IDS}
 
 # --- 2. WEB SERVER (KEEP ALIVE) ---
 app = Flask('')
 @app.route('/')
-def home(): return "Bot is running."
+def home(): 
+    return "Bot is running."
 
 def run():
     port = int(os.environ.get("PORT", 8080))
@@ -43,8 +43,9 @@ def keep_alive():
 # --- 3. BOT SETUP ---
 intents = discord.Intents.default()
 intents.message_content = True 
-intents.voice_states = True  # <--- This is the "Voice State Intent" in code
+intents.voice_states = True 
 bot = commands.Bot(command_prefix="!", intents=intents)
+
 # --- 4. ACTIVITY & PROMO LOGIC ---
 @bot.event
 async def on_message(message):
@@ -55,6 +56,7 @@ async def on_message(message):
     if cid in PROMO_CHANNEL_IDS:
         current_time = time.time()
         
+        # Reset window if expired
         if current_time - window_start_time[cid] > PROMO_WINDOW:
             channel_hype[cid] = 0
             window_start_time[cid] = current_time
@@ -83,24 +85,25 @@ async def beep_loop():
         except Exception as e:
             print(f"Beep error: {e}")
 
-    # 2. Voice Beep (Synced & Stable)
+    # 2. Voice Beep
     global current_voice_client
     if current_voice_client and current_voice_client.is_connected():
         try:
-            # Added loglevel panic to save CPU and after= to cleanup
-            def after_playing(error):
-                if error: print(f"Loop player error: {error}")
-
             if not current_voice_client.is_playing():
-                source = discord.FFmpegPCMAudio('beep.mp3', options="-loglevel panic")
-                current_voice_client.play(source, after=after_playing)
+                # Added reconnect options for stability
+                source = discord.FFmpegPCMAudio(
+                    'beep.mp3', 
+                    options="-loglevel panic",
+                    before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+                )
+                current_voice_client.play(source)
         except Exception as e:
             print(f"Loop voice error: {e}")
 
 # --- 6. COMMANDS ---
 @bot.command(name="beep")
-@bot.command(name="beep")
 async def manual_beep(ctx):
+    # Restrict to specific User ID
     if ctx.author.id != 666000585266561034:
         return
 
@@ -111,19 +114,17 @@ async def manual_beep(ctx):
     if channel:
         await channel.send("beep beep (manual)")
 
-    if current_voice_client and current_voice_client.is_connected():
+    # Voice Beep
+    # Use ctx.voice_client as a fallback for the global tracker
+    v_client = current_voice_client or ctx.voice_client
+    if v_client and v_client.is_connected():
         try:
-            # We add a 'cleanup' to handle the player better
-            def after_playing(error):
-                if error:
-                    print(f"Player error: {error}")
-
-            if not current_voice_client.is_playing():
-                # Use FFmpegPCMAudio with options to reduce CPU load
+            if not v_client.is_playing():
                 source = discord.FFmpegPCMAudio('beep.mp3', options="-loglevel panic")
-                current_voice_client.play(source, after=after_playing)
+                v_client.play(source)
         except Exception as e:
             print(f"Voice error: {e}")
+
 @bot.command(name="join")
 async def join(ctx):
     global current_voice_client
@@ -141,17 +142,21 @@ async def join(ctx):
         return
 
     channel = ctx.author.voice.channel
-    current_voice_client = await channel.connect()
-    await ctx.send(f"Joined {channel.name}!")
+    try:
+        current_voice_client = await channel.connect()
+        await ctx.send(f"Joined {channel.name}!")
+    except Exception as e:
+        await ctx.send(f"Failed to join: {e}")
     
 @bot.command(name="lifesteal")
 async def lifesteal(ctx):
     try:
         await ctx.message.delete()
         duration = datetime.timedelta(minutes=10)
+        # Author must have higher permissions than the bot for this to fail
         await ctx.author.timeout(duration, reason="void.")
-    except Exception:
-        pass 
+    except Exception as e:
+        print(f"Timeout failed: {e}")
 
 # --- 7. STARTUP ---
 @bot.event
@@ -162,4 +167,8 @@ async def on_ready():
 
 if __name__ == "__main__":
     keep_alive()
-    bot.run(os.getenv('DISCORD_TOKEN'))
+    token = os.getenv('DISCORD_TOKEN')
+    if token:
+        bot.run(token)
+    else:
+        print("Error: No DISCORD_TOKEN found in environment variables.")
